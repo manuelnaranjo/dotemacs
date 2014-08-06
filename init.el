@@ -1147,6 +1147,12 @@ MAX-DEPTH limits the depth of subdirectory search."
     (bind-key "C-j" nil zencoding-mode-keymap)
     (add-hook 'sgml-mode-hook 'zencoding-mode)))
 
+
+(user-package angular-snippets
+  :if (not noninteractive)
+  :ensure angular-snippets)
+
+
 
 ;;; Random utilities
 

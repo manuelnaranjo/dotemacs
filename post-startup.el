@@ -14,3 +14,5 @@
 
 (require 'angular-html-mode)
 (require 'angular-mode)
+
+(require 'iso-transl)

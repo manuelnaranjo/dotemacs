@@ -41,40 +41,43 @@ Disables all packages that are member of the
 (font-lock-add-keywords 'emacs-lisp-mode user-package-font-lock-keywords)
 
 
-;;; el-get integration
-(add-to-list 'load-path "~/.emacs.d/el-get/el-get")
-
-(unless (require 'el-get nil 'noerror)
-  (with-current-buffer
-      (url-retrieve-synchronously
-       "https://raw.github.com/dimitri/el-get/master/el-get-install.el")
-    (let (el-get-master-branch)
-      (goto-char (point-max))
-      (eval-print-last-sexp))))
-
-(add-to-list 'el-get-recipe-path "~/.emacs.d/recipes")
-
-(mapc (lambda (filename)
-        (let ((filename (expand-file-name filename el-get-dir)))
-          (when (file-directory-p filename)
-            (setq load-path (cons filename load-path)))))
-      (cddr (directory-files el-get-dir)))
-
-(setq el-get-sources '(python))
-
-(defalias 'el-get-init 'ignore
-  "Don't use el-get for making packages available for use.")
-
-(dolist (pkg el-get-sources)
-  (unless (or (memq pkg my:disabled-packages)
-              (el-get-package-is-installed pkg))
-    (el-get-install pkg)))
-
-
 ;;; Environment
 (let ((bindir (expand-file-name "~/bin")))
   (setenv "PATH" (concat bindir  ":" (getenv "PATH")))
   (add-to-list 'exec-path bindir))
+
+
+;;; Install python.el development version
+
+(add-to-list 'load-path user-emacs-directory)
+
+(defun my:ensure-python.el (&optional branch overwrite)
+  "Install python.el from BRANCH.
+After the first install happens the file is not overwritten again
+unless the optional argument OVERWRITE is non-nil.  When called
+interactively python.el will always be overwritten with the
+latest version."
+  (interactive
+   (list
+    (completing-read "Install python.el from branch: "
+                     (list "master" "emacs-24")
+                     nil t)
+    t))
+  (let* ((branch (or branch "master"))
+         (url (format
+               (concat "http://git.savannah.gnu.org/cgit/emacs.git/plain"
+                       "/lisp/progmodes/python.el?h=%s") branch))
+         (destination (expand-file-name "python.el" user-emacs-directory))
+         (write (or (not (file-exists-p destination)) overwrite)))
+    (when write
+      (with-current-buffer
+          (url-retrieve-synchronously url)
+        (delete-region (point-min) (1+ url-http-end-of-headers))
+        (write-file destination))
+      (byte-compile-file destination t)
+      destination)))
+
+(my:ensure-python.el)
 
 
 ;;; Packages and config
@@ -125,8 +128,6 @@ Disables all packages that are member of the
     (user-package cider
       :ensure cider
       :diminish cider-mode)
-    (user-package cider-tracing
-      :ensure cider-tracing)
     (user-package ac-nrepl
       :ensure ac-nrepl)
     (user-package align-cljlet
@@ -135,6 +136,8 @@ Disables all packages that are member of the
       :ensure clojure-cheatsheet)
     (user-package clj-refactor
       :ensure clj-refactor)
+    (user-package slamhound
+      :ensure slamhound)
     (setq
      cider-lein-command (executable-find "lein")
      cider-popup-stacktraces t
@@ -158,9 +161,47 @@ Disables all packages that are member of the
 (user-package cus-theme
   :config
   (progn
+    (user-package helm-themes
+      :ensure helm-themes)
+    (defun my:load-random-theme (&optional msg)
+      "Load a random theme."
+      (interactive "p")
+      (let ((success))
+        (while (not success)
+          (let* ((themes (custom-available-themes))
+                 (random-theme
+                  (progn
+                    (random t)
+                    (nth (random (length themes)) themes))))
+            (condition-case err
+                (progn
+                  (helm-themes--load-theme (symbol-name random-theme))
+                  (setq success t))
+              (error
+               (message "Failed to load %s. Retrying..." random-theme)))
+            (when (and success msg)
+              (message "Loaded theme %s" random-theme))))))
+    (user-package ample-theme
+      :ensure ample-theme
+      :defer t)
+    (user-package color-theme-sanityinc-solarized
+      :ensure color-theme-sanityinc-solarized
+      :defer t)
+    (user-package color-theme-sanityinc-tomorrow
+      :ensure color-theme-sanityinc-tomorrow
+      :defer t)
     (user-package cyberpunk-theme
-      :ensure cyberpunk-theme)
-    (load-theme 'cyberpunk t)))
+      :ensure cyberpunk-theme
+      :defer t)
+    (user-package leuven-theme
+      :ensure leuven-theme
+      :defer t)
+    (user-package monokai-theme
+      :ensure monokai-theme
+      :defer t)
+    (user-package zenburn-theme
+      :ensure zenburn-theme
+      :defer t)))
 
 (user-package deft
   :if (not noninteractive)
@@ -348,54 +389,93 @@ adding files."
       "Trigger cursor changes for god mode after selecting a window."
       (my:god-update-cursor))
 
-    (bind-key "<f1>" 'god-mode-all)
-    (bind-key "i" 'god-local-mode god-local-mode-map)
+    (bind-key "<escape>" 'god-mode-all)
+    (bind-key "i" 'god-local-mode god-local-mode-map)))
 
-    (when (not god-global-mode)
-      (god-mode-all))))
+(user-package helm
+  :if (not noninteractive)
+  :ensure helm
+  :config
+  (progn
+    (bind-key "<RET>" #'helm-maybe-exit-minibuffer helm-map)
+    (bind-key "C-i" #'helm-execute-persistent-action helm-map)
+    (bind-key "C-j" #'helm-maybe-exit-minibuffer helm-map)
+    (bind-key "C-x b" #'helm-mini)
+    (bind-key "C-x C-f" #'helm-find-files)
+    (bind-key "C-z" #'helm-select-action helm-map)
+    (bind-key "M-y" #'helm-show-kill-ring)
+    (setq helm-buffers-fuzzy-matching t
+          helm-ff-auto-update-initial-value t
+          helm-ff-file-name-history-use-recentf t
+          helm-ff-search-library-in-sexp t
+          helm-ff-skip-boring-files t
+          helm-move-to-line-cycle-in-source t
+          helm-scroll-amount 8
+          helm-split-window-in-side-p t)
+    (helm-mode 1)
+    (user-package helm-swoop
+      :ensure helm-swoop)
+    (bind-key "C-x M-i" #'helm-multi-swoop)
+    (bind-key "M-I" #'helm-swoop-back-to-last-point)
+    (bind-key "M-i" #'helm-multi-swoop-all-from-helm-swoop helm-swoop-map)
+    (bind-key "M-i" #'helm-swoop)
+    (bind-key "M-i" #'helm-swoop-from-isearch isearch-mode-map)
+    (setq helm-multi-swoop-edit-save t
+          helm-swoop-speed-or-color t
+          helm-swoop-split-direction #'split-window-horizontally
+          helm-swoop-split-with-multiple-windows nil
+          helm-swoop-use-line-number-face t)))
 
 (user-package ido
   :if (not noninteractive)
-  :config (progn
-            (ido-mode 1)
-            (ido-everywhere 1)
-            (setq ido-enable-flex-matching t)
-            (setq ido-use-faces nil)
-            (user-package flx
-              :ensure flx
-              :config (user-package flx-ido
-                        :ensure flx-ido
-                        :config (progn
-                                  (flx-ido-mode 1)
-                                  (setq flx-ido-use-faces t))))))
+  :config
+  (progn
+    (user-package ido-vertical-mode
+      :ensure ido-vertical-mode)
+    (user-package flx
+      :ensure flx)
+    (user-package flx-ido
+      :ensure flx-ido)
+    (setq ido-enable-flex-matching t
+          ido-use-faces nil
+          flx-ido-use-faces t)
+    (ido-mode 1)
+    (ido-everywhere 1)
+    (ido-vertical-mode 1)
+    (flx-ido-mode 1)))
 
 (user-package flycheck
   :ensure flycheck
-  :config (progn
-            ;; Add virtualenv support for checkers
-            (defadvice flycheck-check-executable
-              (around python-flycheck-check-executable (checker)
-                      activate compile)
-              "`flycheck-check-executable' with virtualenv support."
-              (if (eq major-mode 'python-mode)
-                  (let* ((process-environment (python-shell-calculate-process-environment))
-                         (exec-path (python-shell-calculate-exec-path)))
-                    ad-do-it)
-                ad-do-it))
+  :config
+  (progn
+    ;; Add virtualenv support for checkers
+    (defadvice flycheck-checker-executable
+      (around python-flycheck-check-executable (checker)
+              activate compile)
+      "`flycheck-checker-executable' with virtualenv support."
+      (if (eq major-mode 'python-mode)
+          (let* ((process-environment (python-shell-calculate-process-environment))
+                 (exec-path (python-shell-calculate-exec-path)))
+            ad-do-it)
+        ad-do-it))
 
-            (defadvice flycheck-start-checker
-              (around python-flycheck-start-checker (checker)
-                      activate compile)
-              "`flycheck-start-checker' with virtualenv support."
-              (if (eq major-mode 'python-mode)
-                  (let* ((process-environment (python-shell-calculate-process-environment))
-                         (exec-path (python-shell-calculate-exec-path)))
-                    ad-do-it)
-                ad-do-it))
+    (defadvice flycheck-start-checker
+      (around python-flycheck-start-checker (checker callback)
+              activate compile)
+      "`flycheck-start-checker' with virtualenv support."
+      (if (eq major-mode 'python-mode)
+          (let* ((process-environment (python-shell-calculate-process-environment))
+                 (exec-path (python-shell-calculate-exec-path)))
+            ad-do-it)
+        ad-do-it))
 
-            (setq flycheck-mode-line-lighter " ")
+    (setq flycheck-mode-line-lighter " ")
 
-            (global-flycheck-mode 1)))
+    (global-flycheck-mode 1)
+
+    (user-package helm-flycheck
+      :ensure helm-flycheck)
+    (bind-key "C-c ! !" #'helm-flycheck flycheck-mode-map)))
 
 (user-package gist
   :if (not noninteractive)
@@ -785,74 +865,6 @@ instead and do not execute any external program."
       :ensure jedi)
     (setq jedi:complete-on-dot t)
     (remove-hook 'python-mode-hook 'wisent-python-default-setup)
-
-    (defun python-util-list-files (dir &optional predicate)
-      "List files in DIR, filtering with PREDICATE.
-Argument PREDICATE must be a function taking one argument (a full
-path) and must return non-nil for allowed files."
-      (let ((dir-name (file-name-as-directory dir)))
-        (apply #'nconc
-               (mapcar (lambda (file-name)
-                         (let ((file-name (expand-file-name file-name dir-name)))
-                           (when (funcall predicate file-name)
-                             (list file-name))))
-                       (cddr (directory-files dir-name))))))
-
-    (defun python-util--list-subdirs (to-scan tally step max-depth)
-      "Internal implementation for `python-util-list-subdirs'.
-Argument TO-SCAN keeps a tally of all the directories to be
-scanned.  Argument TALLY keeps all explored subdirs.  Argument
-STEP keeps track of the current processing depth.  Argument
-MAX-DEPTH limits the depth of subdirectory search."
-      (if (null to-scan)
-          (reverse tally)
-        (let* ((dir (car to-scan))
-               (subdirs (when (< step max-depth)
-                          (python-util-list-files dir #'file-directory-p))))
-          (python-util--list-subdirs
-           (append (cdr to-scan) subdirs) (cons dir tally) (1+ step) max-depth))))
-
-    (defun python-util-list-subdirs (dir &optional max-depth)
-      "List subdirectories of DIR, limited by MAX-DEPTH."
-      (python-util--list-subdirs (list dir) nil 0 (or max-depth 1.0e+INF)))
-
-    (defun python-util-list-packages (dir &optional max-depth)
-      "List packages in DIR, limited by MAX-DEPTH."
-      (let* ((parent-dir (file-name-directory
-                          (directory-file-name
-                           (file-name-directory
-                            (file-name-as-directory dir)))))
-             (subpath-length (length parent-dir)))
-        (mapcar
-         (lambda (file-name)
-           (replace-regexp-in-string
-            (rx (or ?\\ ?/)) "." (substring file-name subpath-length)))
-         (python-util-list-subdirs (directory-file-name dir) max-depth))))
-
-    (defvar python-shell--package-depth 4)
-
-    (defun python-shell-enable-package (directory package)
-      "Add DIRECTORY parent to path and enable PACKAGE."
-      (interactive
-       (let* ((dir (expand-file-name
-                    (read-directory-name
-                     "Package root: "
-                     (file-name-directory
-                      (or (buffer-file-name) default-directory)))))
-              (name (completing-read
-                     "Package: "
-                     (python-util-list-packages
-                      dir python-shell--package-depth))))
-         (list dir name)))
-      (python-shell-send-string
-       (format
-        (concat
-         "import os.path;import sys;"
-         "sys.path.append(os.path.dirname(os.path.dirname('''%s''')));"
-         "__package__ = '''%s''';"
-         "import %s")
-        directory package package)))
-
     (add-hook 'python-mode-hook 'jedi:setup)))
 
 (user-package python-django
@@ -882,10 +894,6 @@ MAX-DEPTH limits the depth of subdirectory search."
   :if (not noninteractive)
   :ensure region-bindings-mode
   :config (progn
-            (bind-key "f" 'mc/mmlte--right mc/mark-more-like-this-extended-keymap)
-            (bind-key "b" 'mc/mmlte--left mc/mark-more-like-this-extended-keymap)
-            (bind-key "n" 'mc/mmlte--down mc/mark-more-like-this-extended-keymap)
-            (bind-key "p" 'mc/mmlte--up mc/mark-more-like-this-extended-keymap)
             (bind-key "m" 'mc/mark-more-like-this-extended region-bindings-mode-map)
             (bind-key "a" 'mc/mark-all-like-this region-bindings-mode-map)
             (bind-key "p" 'mc/mark-previous-like-this region-bindings-mode-map)
@@ -932,24 +940,22 @@ MAX-DEPTH limits the depth of subdirectory search."
 (user-package simple
   :config
   (progn
-    ;; http://www.emacswiki.org/emacs/DefaultKillingAndYanking
-    (defun yank-pop-backwards ()
-      "Yank backwards."
-      (interactive)
-      (yank-pop -1))
-    (bind-key "M-Y" 'yank-pop-backwards)))
-
-(user-package xclip
-  :ensure xclip
-  :if (getenv "DISPLAY")
-  :config
-  (progn
-    (condition-case err
-        (progn (xclip-mode 1)
-               (turn-on-xclip))
-      (file-error
-       (message
-        "Failed to find %s program, not using xclip.el." xclip-program)))))
+    (let ((xsel-program (executable-find "xsel")))
+      (when xsel-program
+        (defun xsel-cut-function (text &optional push)
+          (when (getenv "DISPLAY")
+            (with-temp-buffer
+              (insert text)
+              (call-process-region
+               (point-min) (point-max) "xsel" nil 0 nil "--clipboard" "--input"))))
+        (defun xsel-paste-function()
+          (when (getenv "DISPLAY")
+            (let ((xsel-output
+                   (shell-command-to-string "xsel --clipboard --output")))
+              (unless (string= (car kill-ring) xsel-output)
+                xsel-output))))
+        (setq interprogram-cut-function 'xsel-cut-function
+              interprogram-paste-function 'xsel-paste-function)))))
 
 (user-package smartparens
   :if (not noninteractive)
@@ -1095,6 +1101,20 @@ MAX-DEPTH limits the depth of subdirectory search."
 (user-package warnings
   :config (setq warning-suppress-types nil))
 
+(user-package wgrep
+  :if (not noninteractive)
+  :ensure wgrep
+  :config
+  (progn
+    (setq wgrep-auto-save-buffer t
+          wgrep-enable-key "\C-x\C-q"
+          wgrep-change-readonly-file t)
+    (user-package wgrep-ag
+      :ensure wgrep-ag)
+    (add-hook 'ag-mode-hook #'wgrep-ag-setup)
+    (user-package wgrep-helm
+      :ensure wgrep-helm)))
+
 (user-package which-func
   :if (not noninteractive)
   :config (which-function-mode 1))
@@ -1193,12 +1213,30 @@ MAX-DEPTH limits the depth of subdirectory search."
   exactly as it appears in the minibuffer prompt."
   ;; Based on insert-file in Emacs -- ashawley 20080926
   (interactive "*fInsert file name: \np")
-  (cond ((<= 1 arg)
+  (cond ((<= arg 1)
          (insert (file-relative-name filename)))
-        ((<= 4 arg)
+        ((<= arg 4)
          (insert (expand-file-name filename)))
         (t
          (insert filename))))
+
+(defun kill-ring-save-file-name (&optional arg)
+  "Save file name for current buffer to `kill-ring'.
+
+  With \\[universal-argument] ARG <= 1, save filename's relative
+  path.  See `file-relative-name' for details.
+
+  With 1 < \\[universal-argument] ARG <= 4, save filename's fully
+  canocalized path.  See `expand-file-name'.
+
+  With \\[universal-argument] ARG > 4, save the current value of
+  `buffer-file-name' unmodified."
+  (interactive "p")
+  (when buffer-file-name
+    (let ((file-name buffer-file-name))
+      (with-temp-buffer
+        (insert-file-name file-name (or arg 1))
+        (kill-region (point-min) (point-max))))))
 
 (defun other-window-backward (count &optional all-frames)
   (interactive "p")
@@ -1210,6 +1248,16 @@ MAX-DEPTH limits the depth of subdirectory search."
   (let ((current-mode major-mode))
     (switch-to-buffer-other-window
      (get-buffer-create "*scratch*"))))
+
+(defun eval-and-replace ()
+  "Replace the preceding sexp with its value."
+  (interactive)
+  (backward-kill-sexp)
+  (condition-case nil
+      (prin1 (eval (read (current-kill 0)))
+             (current-buffer))
+    (error (message "Invalid expression")
+           (insert (current-kill 0)))))
 
 
 ;;; Global
@@ -1225,7 +1273,6 @@ MAX-DEPTH limits the depth of subdirectory search."
 (setq echo-keystrokes 0.01
       enable-recursive-minibuffers t
       max-specpdl-size 999999999
-      redisplay-dont-pause t
       visible-bell t)
 
 (setq-default
@@ -1250,13 +1297,12 @@ MAX-DEPTH limits the depth of subdirectory search."
       x-select-enable-clipboard t
       x-select-enable-primary t)
 
-(load "~/.emacs.d/secrets.el" 'noerror)
-(load "~/.emacs.d/post-startup.el" 'noerror)
+;;; Global bindings
+;; Use shell-like backspace C-h, rebind help to F1
+(define-key key-translation-map [?\C-h] [?\C-?])
+(bind-key "<f1>" #'help-command)
 
-(setq custom-file "~/.emacs.d/custom.el")
-(load custom-file 'noerror)
-
-;; Fixes for xterm keys
+;;; Fixes for xterm keys
 (bind-key "\e[7~" [home] function-key-map)
 (bind-key "\e[8~" [end] function-key-map)
 (bind-key "\e[11~" [f1] function-key-map)
@@ -1289,6 +1335,12 @@ MAX-DEPTH limits the depth of subdirectory search."
 (bind-key "\033[1;2B" [(shift down)] function-key-map)
 (bind-key "\033[1;2D" [(shift left)] function-key-map)
 (bind-key "\033[1;2C" [(shift right)] function-key-map)
+
+(load "~/.emacs.d/secrets.el" 'noerror)
+(load "~/.emacs.d/post-startup.el" 'noerror)
+
+(setq custom-file "~/.emacs.d/custom.el")
+(load custom-file 'noerror)
 
 ;; Local Variables:
 ;; mode: emacs-lisp

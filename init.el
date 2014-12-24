@@ -708,22 +708,22 @@ instead and do not execute any external program."
     (add-hook 'gnus-group-mode-hook #'gnus-group-set-keys-hook)
     (add-hook 'gnus-summary-mode-hook #'gnus-summary-set-keys-hook)))
 
-(user-package multiple-cursors
-  :bind (("M-m" . mc/mark-more-like-this-extended)
-         ("M-p" . mc/mark-all-in-region)
-         ("M-n" . mc/mark-all-like-this)
-         ("C-S-c C-S-c" . mc/edit-lines)
-         ("C-S-c C-e" . mc/edit-ends-of-lines)
-         ("C-S-c C-a" . mc/edit-beginnings-of-lines))
-  :defines (multiple-cursors-mode
-            mc--read-char
-            mc--read-char
-            multiple-cursors-mode
-            mc--read-quoted-char
-            mc--read-quoted-char
-            rectangular-region-mode
-            rectangular-region-mode)
-  :ensure multiple-cursors)
+;; (user-package multiple-cursors
+;;   :bind (("M-m" . mc/mark-more-like-this-extended)
+;;          ("M-p" . mc/mark-all-in-region)
+;;          ("M-n" . mc/mark-all-like-this)
+;;          ("C-S-c C-S-c" . mc/edit-lines)
+;;          ("C-S-c C-e" . mc/edit-ends-of-lines)
+;;          ("C-S-c C-a" . mc/edit-beginnings-of-lines))
+;;   :defines (multiple-cursors-mode
+;;             mc--read-char
+;;             mc--read-char
+;;             multiple-cursors-mode
+;;             mc--read-quoted-char
+;;             mc--read-quoted-char
+;;             rectangular-region-mode
+;;             rectangular-region-mode)
+;;   :ensure multiple-cursors)
 
 (user-package multi-web-mode
   :if (not noninteractive)

@@ -287,6 +287,14 @@ adding files."
          ("C-M-@" . er/expand-region))
   :ensure expand-region)
 
+;; Write backups to ~/.emacs.d/backup/
+(setq backup-directory-alist '(("." . "~/.emacs.d/backup"))
+      backup-by-copying      t  ; Don't de-link hard links
+      version-control        t  ; Use version numbers on backups
+      delete-old-versions    t  ; Automatically delete excess backups:
+      kept-new-versions      100 ; how many of the newest versions to keep
+      kept-old-versions      10) ; and how many of the old
+
 (user-package files
   :config (progn
             (setq auto-save-default nil)

@@ -48,11 +48,6 @@ Disables all packages that are member of the
   (setenv "PATH" (concat bindir  ":" (getenv "PATH")))
   (add-to-list 'exec-path bindir))
 
-
-;;; Install python.el development version
-
-(add-to-list 'load-path user-emacs-directory)
-
 (defun my:ensure-python.el (&optional branch overwrite)
   "Install python.el from BRANCH.
 After the first install happens the file is not overwritten again

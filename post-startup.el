@@ -31,3 +31,6 @@
 
 (setq-default truncate-lines t)
 ;;; post-startup ends here
+
+(setq magit-auto-revert-mode nil)
+(setq magit-last-seen-setup-instructions "1.4.0")
